@@ -30,7 +30,7 @@ sup{font:10px system-ui,sans-serif;color:var(--mute)}
 <main><h1 id="hw"></h1><div id="msg"></div><div id="d"></div><div id="pop">點搭配詞看實際片語與次數</div></main>
 <script>
 // ====== 設定：部署 Cloudflare Worker 後把網址貼這裡 ======
-const PROXY = ""; // 留空＝直接連 Linggle；被擋就部署 worker.js 後填網址，例："https://ecp-linggle.你的帳號.workers.dev"
+const PROXY = "https://ecp-linggle.yangkou990716.workers.dev"; // 留空＝直接連 Linggle；被擋就部署 worker.js 後填網址，例："https://ecp-linggle.你的帳號.workers.dev"
 // =========================================================
 const PATS=[["adj + N","adj. W"],["v + N","v. * W"],["N + prep","W prep."]];
 const L={A1:1,A2:2,B1:3,B2:4,C1:5,C2:6},$=i=>document.getElementById(i);
