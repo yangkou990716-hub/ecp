@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ECP 搭配詞典</title>
+<style>
+:root{--bg:#f6f1e7;--paper:#fffdf8;--ink:#1d1a16;--mute:#6b6257;--red:#c8231c;--line:#e2d9c8;--chip:#efe6d4;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#17150f;--paper:#211e17;--ink:#eee6d6;--mute:#a89d8b;--red:#ff6a5c;--line:#3a342a;--chip:#2e2920;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Noto Serif TC",serif;line-height:1.6;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bar{position:sticky;top:0;padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;background:var(--paper);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center;z-index:5;font:14px system-ui,sans-serif}
+input,select,button{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+button{background:var(--red);color:#fff;border:0;cursor:pointer}
+label{display:flex;gap:4px;align-items:center;color:var(--mute)}
+main{max-width:760px;margin:24px auto;padding:28px;background:var(--paper);border:1px solid var(--line)}
+h1{margin:0 0 12px;font-size:2.4rem;color:var(--red)}h1 small{font-size:1rem;color:var(--ink);font-style:italic}
+.sense{margin:14px 0;padding-left:18px;border-left:3px solid var(--red)}
+.pat{font:700 12px system-ui,sans-serif;color:var(--red)}
+.c{font-weight:700;cursor:pointer;white-space:nowrap}.c:hover{color:var(--red)}
+sup{font:10px system-ui,sans-serif;color:var(--mute)}
+.lv-A1,.lv-A2{color:#2a8a3e}.lv-B1,.lv-B2{color:#1f6fb5}.lv-C1,.lv-C2{color:#b5521f}
+#pop,#msg{font:14px system-ui,sans-serif;background:var(--chip);padding:10px 12px;border-radius:6px;margin-top:12px}
+#msg:empty{display:none}
+</style></head><body>
+<div class="bar">
+<input id="w" value="ability" size="12"><button id="go">查詢</button>
+<select id="sort"><option value="freqDown">頻率 高→低</option><option value="freqUp">頻率 低→高</option><option value="cefrUp">CEFR A1→C2</option><option value="cefrDown">CEFR C2→A1</option><option value="alpha">字母</option></select>
+<select id="max"><option value="9">全部等級</option><option value="2">≤A2</option><option value="3">≤B1</option><option value="4">≤B2</option><option value="5">≤C1</option></select>
+<label><input type="checkbox" id="sc" checked>CEFR</label><label><input type="checkbox" id="sf" checked>頻率</label>
+</div>
+<main><h1 id="hw"></h1><div id="msg"></div><div id="d"></div><div id="pop">點搭配詞看實際片語與次數</div></main>
+<script>
+// ====== 設定：部署 Cloudflare Worker 後把網址貼這裡 ======
+const PROXY = ""; // 留空＝直接連 Linggle；被擋就部署 worker.js 後填網址，例："https://ecp-linggle.你的帳號.workers.dev"
+// =========================================================
+const PATS=[["adj + N","adj. W"],["v + N","v. * W"],["N + prep","W prep."]];
+const L={A1:1,A2:2,B1:3,B2:4,C1:5,C2:6},$=i=>document.getElementById(i);
+const BE=new Set("is are was were be been being am 's".split(" ")),STOP=new Set("including include includes features provides provide gives give offer offers".split(" "));
+const LEM={has:"have",had:"have",having:"have",demonstrated:"demonstrate",demonstrates:"demonstrate",shows:"show",showed:"show",develops:"develop",developed:"develop",improves:"improve",improved:"improve",lost:"lose",loses:"lose",lacks:"lack",lacked:"lack",affects:"affect",affected:"affect"};
+// 沒設 PROXY 時的示範資料（取自 Linggle 截圖）
+const DEMO={"adj. ability":[["unique ability",200221],["natural ability",100387],["limited ability",92372],["athletic ability",89645],["proven ability",85219],["uncanny ability",84247],["technical ability",81469],["physical ability",79368],["cognitive ability",71288],["academic ability",59948],["greater ability",56877],["special ability",56232],["financial ability",53784],["innate ability",47610],["mental ability",46610]],
+"v. * ability":[["have the ability",1829664],["is the ability",905728],["has the ability",882194],["include the ability",278075],["including the ability",204499],["provides the ability",188192],["gives you the ability",174746],["had the ability",152530],["is its ability",140636],["demonstrate the ability",135525],["provide the ability",93236],["having the ability",92848]]};
+let CEFR={},rows=[],demo=false;
+fetch("cefr.json").then(r=>r.json()).then(j=>{CEFR=j;render()}).catch(()=>{});
+async function q(s){
+  const url=PROXY?PROXY+"?q="+encodeURIComponent(s):"https://search.linggle.com/api/ngram/"+encodeURIComponent(s.replace(/\//g,"@"));
+  try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);
+    const j=await r.json();return (j.ngrams||j).map(x=>[x[0],+x[1]]);}
+  catch(e){if(PROXY)throw e;demo=true;return DEMO[s.replace($("w").value.trim().toLowerCase(),"ability")]||[]}
+}
+async function search(){
+  const w=$("w").value.trim().toLowerCase();if(!w)return;
+  $("hw").innerHTML=`${w} <small>${CEFR[w]?"("+CEFR[w]+")":""}</small>`;$("msg").textContent="查詢中…";rows=[];demo=false;
+  for(const [p,t] of PATS){
+    try{
+      const ng=await q(t.replace("W",w)),m={};
+      for(const [ph,c] of ng){const tk=ph.toLowerCase().split(/\s+/);
+        let col=p==="N + prep"?tk[tk.length-1]:tk[0];col=LEM[col]||col;
+        if(BE.has(col)||STOP.has(col)||col===w)continue;if(p==="v + N"&&tk.length>3)continue;
+        (m[col]??={col,c:0,ph:[]}).c+=c;m[col].ph.push([ph,c]);}
+      rows.push({p,items:Object.values(m)});
+    }catch(e){$("msg").textContent=`${t} 查詢失敗（${e.message}），檢查 PROXY 與 Worker 設定`}
+  }
+  if(!/失敗/.test($("msg").textContent))$("msg").textContent=demo?"直連 Linggle 被瀏覽器擋（CORS），目前顯示 ability 示範資料；請部署 Worker 並填 PROXY":"";
+  render();
+}
+function render(){
+  const so=$("sort").value,mx=+$("max").value,sc=$("sc").checked,sf=$("sf").checked;
+  const lv=c=>L[CEFR[c]]||9;
+  const f={alpha:(a,b)=>a.col.localeCompare(b.col),freqDown:(a,b)=>b.c-a.c,freqUp:(a,b)=>a.c-b.c,cefrUp:(a,b)=>lv(a.col)-lv(b.col)||b.c-a.c,cefrDown:(a,b)=>(lv(b.col)%9)-(lv(a.col)%9)||b.c-a.c}[so];
+  $("d").innerHTML=rows.map((s,i)=>{const it=s.items.filter(x=>mx===9||lv(x.col)<=mx).sort(f);if(!it.length)return"";
+    return`<div class="sense"><span class="pat">${s.p}</span><br>`+it.map(x=>{const t=[sc&&CEFR[x.col]?`<span class="lv-${CEFR[x.col]}">${CEFR[x.col]}</span>`:"",sf?Math.round(x.c/1000*100)/100:""].filter(v=>v!=="").join(", ");
+    return`<span class="c" data-i="${i}" data-c="${x.col}">${x.col}${t?`<sup>[${t}]</sup>`:""}</span>`}).join(", ")+"</div>"}).join("");
+}
+$("d").addEventListener("click",e=>{const t=e.target.closest(".c");if(!t)return;const x=rows[t.dataset.i].items.find(y=>y.col===t.dataset.c);
+  $("pop").innerHTML=x.ph.map(([p,c])=>`<b>${p}</b> ${c.toLocaleString()}`).join("<br>")});
+$("go").onclick=search;$("w").addEventListener("keydown",e=>e.key==="Enter"&&search());
+["sort","max","sc","sf"].forEach(i=>$(i).addEventListener("input",render));
+search();
+</script></body></html>
